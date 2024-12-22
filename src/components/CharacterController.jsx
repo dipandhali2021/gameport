@@ -2,11 +2,20 @@ import { useKeyboardControls } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { CapsuleCollider, RigidBody, useRapier } from '@react-three/rapier';
 import { useControls } from 'leva';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { MathUtils, Vector3 } from 'three';
 import { degToRad } from 'three/src/math/MathUtils.js';
 import { CAMERA_POSITIONS } from './camera/CameraPositions';
 import { Character } from './Character';
+import {  StaticNPC } from './StaticNPC';
+import { InteractButton } from './ui/InteractButton';
+import { DialogBox } from './ui/DialogBox';
+import { UIContext } from '../contexts/UIContext';
+
+
+const INTERACTION_DISTANCE = 1;
+const NPC_POSITION = new Vector3(2.44, -2.11, -2.04);
+
 
 const normalizeAngle = (angle) => {
   while (angle > Math.PI) angle -= 2 * Math.PI;
@@ -65,6 +74,8 @@ export const CharacterController = ({ isFirstPerson }) => {
   const [, get] = useKeyboardControls();
   const isClicking = useRef(false);
 
+  const { setShowInteract } = useContext(UIContext);
+
   // Ground detection ray
   const checkIsGrounded = () => {
     if (!rb.current) return false;
@@ -77,6 +88,29 @@ export const CharacterController = ({ isFirstPerson }) => {
   };
 
   useEffect(() => {
+    const logPosition = () => {
+      if (rb.current) {
+        const pos = rb.current.translation();
+        console.log('Player position:', {
+          x: pos.x.toFixed(2),
+          y: pos.y.toFixed(2),
+          z: pos.z.toFixed(2),
+        });
+      }
+    };
+
+
+
+    // Log every 2 seconds when dev tools are open
+    const interval = setInterval(() => {
+      if (window.devtools?.isOpen) {
+        logPosition();
+      }
+    }, 2000);
+
+
+   
+
     const onMouseDown = (e) => {
       isClicking.current = true;
     };
@@ -88,6 +122,8 @@ export const CharacterController = ({ isFirstPerson }) => {
     document.addEventListener('touchstart', onMouseDown);
     document.addEventListener('touchend', onMouseUp);
     return () => {
+      () => clearInterval(interval);
+      () => window.removeEventListener('keydown', handleKeyPress);
       document.removeEventListener('mousedown', onMouseDown);
       document.removeEventListener('mouseup', onMouseUp);
       document.removeEventListener('touchstart', onMouseDown);
@@ -96,6 +132,24 @@ export const CharacterController = ({ isFirstPerson }) => {
   }, []);
 
   useFrame(({ camera, mouse }) => {
+    if (rb.current) {
+      const position = rb.current.translation();
+      // Log position every frame
+      console.log('Player Position:', {
+        x: Math.round(position.x * 100) / 100,
+        y: Math.round(position.y * 100) / 100,
+        z: Math.round(position.z * 100) / 100,
+      });
+    }
+    if (rb.current) {
+      const position = rb.current.translation();
+      const playerPosition = new Vector3(position.x, position.y, position.z);
+      const distanceToNPC = playerPosition.distanceTo(NPC_POSITION);
+      
+      setShowInteract(distanceToNPC < INTERACTION_DISTANCE);
+
+    }
+    
     if (rb.current) {
       const vel = rb.current.linvel();
       const currentlyGrounded = checkIsGrounded();
@@ -160,7 +214,7 @@ export const CharacterController = ({ isFirstPerson }) => {
         vel.z =
           Math.cos(rotationTarget.current + characterRotationTarget.current) *
           speed;
-        
+
         // Only update movement animation if grounded
         if (currentlyGrounded) {
           setAnimation(isRunning.current ? 'run' : 'walk');
@@ -209,27 +263,38 @@ export const CharacterController = ({ isFirstPerson }) => {
   });
 
   return (
-    <RigidBody 
-      colliders={false} 
-      lockRotations 
-      ref={rb}
-      mass={1}
-      linearDamping={0.5}
-      angularDamping={0.5}
-    >
-      <group ref={container}>
-        <group ref={cameraTarget} position-z={1.5} />
-        <group ref={cameraPosition} />
-        <group ref={character}>
-          <Character
-            scale={0.18}
-            position-y={-0.25}
-            animation={animation}
-            visible={!isFirstPerson}
-          />
+    <>
+      <RigidBody
+        colliders={false}
+        lockRotations
+        ref={rb}
+        mass={1}
+        linearDamping={0.5}
+        angularDamping={0.5}
+      >
+        <group ref={container}>
+          <group ref={cameraTarget} position-z={1.5} />
+          <group ref={cameraPosition} />
+          <group ref={character}>
+            <Character
+              scale={0.18}
+              position-y={-0.25}
+              animation={animation}
+              visible={!isFirstPerson}
+            />
+          </group>
         </group>
-      </group>
-      <CapsuleCollider args={[0.08, 0.15]} />
-    </RigidBody>
+        <CapsuleCollider args={[0.08, 0.15]} />
+      </RigidBody>
+
+      <RigidBody type="fixed" position={[2.44, -2.11, -2.04]}>
+        <StaticNPC
+          scale={0.3}
+          position-y={-0.25}
+          rotation-y={Math.PI * 2}
+        />
+        <CapsuleCollider args={[0.08, 0.15]} />
+      </RigidBody>
+    </>
   );
 };

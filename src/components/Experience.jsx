@@ -30,11 +30,10 @@ const maps = {
 
 export const Experience = ({ isFirstPerson }) => {
   const shadowCameraRef = useRef();
-  
+
   const { map } = useControls('Map', {
     map: {
       value: 'de_dust_2_with_real_light',
-      // options: Object.keys(maps),
     },
   });
 

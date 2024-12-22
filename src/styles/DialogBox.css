@@ -1,0 +1,91 @@
+.dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+  
+  .dialog-container {
+    background-color: #1a1a1a;
+    border: 2px solid #444;
+    border-radius: 12px;
+    padding: 20px;
+    width: 80%;
+    max-width: 800px;
+    color: white;
+  }
+  
+  .dialog-characters {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  
+  .character-portrait {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 3px solid #444;
+    position: relative;
+  }
+  
+  .character-portrait.npc {
+    background-color: #2c3e50;
+  }
+  
+  .character-portrait.player {
+    background-color: #27ae60;
+  }
+  
+  .portrait-label {
+    position: absolute;
+    bottom: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 14px;
+    font-weight: bold;
+  }
+  
+  .dialog-content {
+    background-color: #2d2d2d;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 20px 0;
+  }
+  
+  .dialog-text {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 6px;
+  }
+  
+  .npc-text {
+    background-color: #2c3e50;
+  }
+  
+  .player-text {
+    background-color: #27ae60;
+    text-align: right;
+  }
+  
+  .dialog-next-btn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    float: right;
+    font-weight: bold;
+    transition: background-color 0.3s;
+  }
+  
+  .dialog-next-btn:hover {
+    background-color: #2980b9;
+  }
