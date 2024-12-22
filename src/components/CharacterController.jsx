@@ -1,6 +1,6 @@
 import { useKeyboardControls } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { CapsuleCollider, RigidBody } from '@react-three/rapier';
+import { CapsuleCollider, RigidBody, useRapier } from '@react-three/rapier';
 import { useControls } from 'leva';
 import { useEffect, useRef, useState } from 'react';
 import { MathUtils, Vector3 } from 'three';
@@ -30,7 +30,7 @@ const lerpAngle = (start, end, t) => {
 };
 
 export const CharacterController = ({ isFirstPerson }) => {
-  const { WALK_SPEED, RUN_SPEED, ROTATION_SPEED } = useControls(
+  const { WALK_SPEED, RUN_SPEED, ROTATION_SPEED, JUMP_FORCE } = useControls(
     'Character Control',
     {
       WALK_SPEED: { value: 0.8, min: 0.1, max: 4, step: 0.1 },
@@ -41,13 +41,19 @@ export const CharacterController = ({ isFirstPerson }) => {
         max: degToRad(5),
         step: degToRad(0.1),
       },
+      JUMP_FORCE: { value: 5, min: 1, max: 10, step: 0.1 },
     }
   );
+
   const rb = useRef();
   const container = useRef();
   const character = useRef();
+  const { rapier, world } = useRapier();
 
   const [animation, setAnimation] = useState('idle');
+  const [isGrounded, setIsGrounded] = useState(true);
+  const jumpPressed = useRef(false);
+  const isRunning = useRef(false);
 
   const characterRotationTarget = useRef(0);
   const rotationTarget = useRef(0);
@@ -58,6 +64,17 @@ export const CharacterController = ({ isFirstPerson }) => {
   const cameraLookAt = useRef(new Vector3());
   const [, get] = useKeyboardControls();
   const isClicking = useRef(false);
+
+  // Ground detection ray
+  const checkIsGrounded = () => {
+    if (!rb.current) return false;
+    const origin = rb.current.translation();
+    origin.y -= 0.15; // Adjusted for better ground detection
+    const direction = { x: 0, y: -1, z: 0 };
+    const ray = new rapier.Ray(origin, direction);
+    const hit = world.castRay(ray, 0.3, true);
+    return hit !== null;
+  };
 
   useEffect(() => {
     const onMouseDown = (e) => {
@@ -81,6 +98,17 @@ export const CharacterController = ({ isFirstPerson }) => {
   useFrame(({ camera, mouse }) => {
     if (rb.current) {
       const vel = rb.current.linvel();
+      const currentlyGrounded = checkIsGrounded();
+      setIsGrounded(currentlyGrounded);
+
+      // Handle jumping
+      if (get().jump && currentlyGrounded && !jumpPressed.current) {
+        jumpPressed.current = true;
+        vel.y = JUMP_FORCE;
+        setAnimation('run'); // Using 'run' animation for jump
+      } else if (!get().jump) {
+        jumpPressed.current = false;
+      }
 
       const movement = {
         x: 0,
@@ -93,8 +121,21 @@ export const CharacterController = ({ isFirstPerson }) => {
       if (get().backward) {
         movement.z = -1;
       }
+      if (get().left) {
+        movement.x = 1;
+      }
+      if (get().right) {
+        movement.x = -1;
+      }
 
-      let speed = get().run ? RUN_SPEED : WALK_SPEED;
+      // Update running state
+      isRunning.current = get().run;
+      let speed = isRunning.current ? RUN_SPEED : WALK_SPEED;
+
+      // Reduce air control
+      if (!currentlyGrounded) {
+        speed *= 0.8;
+      }
 
       if (isClicking.current) {
         if (Math.abs(mouse.x) > 0.1) {
@@ -106,17 +147,11 @@ export const CharacterController = ({ isFirstPerson }) => {
         }
       }
 
-      if (get().left) {
-        movement.x = 1;
-      }
-      if (get().right) {
-        movement.x = -1;
-      }
-
       if (movement.x !== 0) {
         rotationTarget.current += ROTATION_SPEED * movement.x;
       }
 
+      // Update movement and animation
       if (movement.x !== 0 || movement.z !== 0) {
         characterRotationTarget.current = Math.atan2(movement.x, movement.z);
         vel.x =
@@ -125,14 +160,15 @@ export const CharacterController = ({ isFirstPerson }) => {
         vel.z =
           Math.cos(rotationTarget.current + characterRotationTarget.current) *
           speed;
-        if (speed === RUN_SPEED) {
-          setAnimation('run');
-        } else {
-          setAnimation('walk');
+        
+        // Only update movement animation if grounded
+        if (currentlyGrounded) {
+          setAnimation(isRunning.current ? 'run' : 'walk');
         }
-      } else {
+      } else if (currentlyGrounded && !jumpPressed.current) {
         setAnimation('idle');
       }
+
       character.current.rotation.y = lerpAngle(
         character.current.rotation.y,
         characterRotationTarget.current,
@@ -157,32 +193,39 @@ export const CharacterController = ({ isFirstPerson }) => {
       ? CAMERA_POSITIONS.firstPerson.lookAt
       : CAMERA_POSITIONS.thirdPerson.lookAt;
 
-  // Smoothly interpolate camera position with easing
-  cameraPosition.current.position.lerp(targetPosition, 0.05);
-  cameraTarget.current.position.lerp(targetLookAt, 0.05);
+    // Smoothly interpolate camera position with easing
+    cameraPosition.current.position.lerp(targetPosition, 0.05);
+    cameraTarget.current.position.lerp(targetLookAt, 0.05);
 
-  // Update world positions
-  cameraPosition.current.getWorldPosition(cameraWorldPosition.current);
-  camera.position.lerp(cameraWorldPosition.current, 0.1);
+    // Update world positions
+    cameraPosition.current.getWorldPosition(cameraWorldPosition.current);
+    camera.position.lerp(cameraWorldPosition.current, 0.1);
 
-  if (cameraTarget.current) {
-    cameraTarget.current.getWorldPosition(cameraLookAtWorldPosition.current);
-    cameraLookAt.current.lerp(cameraLookAtWorldPosition.current, 0.1);
-    camera.lookAt(cameraLookAt.current);
-  }
+    if (cameraTarget.current) {
+      cameraTarget.current.getWorldPosition(cameraLookAtWorldPosition.current);
+      cameraLookAt.current.lerp(cameraLookAtWorldPosition.current, 0.1);
+      camera.lookAt(cameraLookAt.current);
+    }
   });
 
   return (
-    <RigidBody colliders={false} lockRotations ref={rb}>
+    <RigidBody 
+      colliders={false} 
+      lockRotations 
+      ref={rb}
+      mass={1}
+      linearDamping={0.5}
+      angularDamping={0.5}
+    >
       <group ref={container}>
         <group ref={cameraTarget} position-z={1.5} />
         <group ref={cameraPosition} />
         <group ref={character}>
-          <Character 
-            scale={0.18} 
-            position-y={-0.25} 
-            animation={animation} 
-            visible={!isFirstPerson} 
+          <Character
+            scale={0.18}
+            position-y={-0.25}
+            animation={animation}
+            visible={!isFirstPerson}
           />
         </group>
       </group>
